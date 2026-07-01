@@ -37,10 +37,17 @@ def generate_response(prompt: str, memory: list) -> str:
         }
     )
 
-    response = client.chat.completions.create(
+    stream = client.chat.completions.create(
         model=LLM_MODEL,
         messages=messages,
-        temperature=0.2
+        temperature=0.2,
+        stream=True
     )
 
-    return response.choices[0].message.content
+    for chunk in stream:
+
+        if (
+            chunk.choices
+            and chunk.choices[0].delta.content is not None
+        ):
+            yield chunk.choices[0].delta.content

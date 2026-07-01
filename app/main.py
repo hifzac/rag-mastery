@@ -1,89 +1,96 @@
-from pathlib import Path
-
 from loader import load_pdf
 from chunker import chunk_data
 from embeddings import generate_embeddings
 from vector_store import (
     build_index,
     save_index,
-    load_index
+    load_index,
 )
 from retriever import retrieve
 from prompt_builder import build_prompt
 from llm import generate_response
+from memory import add_to_memory
+
+from config import (
+    PDF_PATH,
+    INDEX_PATH,
+    METADATA_PATH,
+    CHUNK_SIZE,
+    CHUNK_OVERLAP,
+    TOP_K,
+)
+
 
 def main():
 
-    # -------------------------------
-    # Project Root
-    # -------------------------------
-    project_root = Path(__file__).resolve().parent.parent
+    # -----------------------------------------
+    # Build Index (Only First Time)
+    # -----------------------------------------
 
-    # -------------------------------
-    # File Paths
-    # -------------------------------
-    pdf_path = (
-        project_root
-        / "data"
-        / "servicenow-australia-operational-technology-enus.pdf"
-    )
-
-    index_path = project_root / "data" / "faiss_index.bin"
-    metadata_path = project_root / "data" / "metadata.pkl"
-
-    # -------------------------------
-    # Build Index (Run Only Once)
-    # -------------------------------
-    if not index_path.exists():
+    if not INDEX_PATH.exists():
 
         print("Loading PDF...")
-        pages = load_pdf(pdf_path)
+
+        pages = load_pdf(PDF_PATH)
+
         print(f"Loaded {len(pages)} pages.")
 
-        print("Creating chunks...")
+        print("Creating Chunks...")
+
         chunks = chunk_data(
             pages,
-            chunk_size=1000,
-            chunk_overlap=200
+            chunk_size=CHUNK_SIZE,
+            chunk_overlap=CHUNK_OVERLAP,
         )
+
         print(f"Created {len(chunks)} chunks.")
 
-        print("Generating embeddings...")
+        print("Generating Embeddings...")
+
         embedded_chunks = generate_embeddings(chunks)
 
-        print("Building FAISS index...")
+        print("Building FAISS Index...")
+
         index, metadata = build_index(embedded_chunks)
 
-        print("Saving index...")
         save_index(
             index,
             metadata,
-            index_path,
-            metadata_path
+            INDEX_PATH,
+            METADATA_PATH,
         )
 
-        print("Index saved successfully!\n")
+        print("Index Created Successfully!\n")
 
-    # -------------------------------
+    # -----------------------------------------
     # Load Existing Index
-    # -------------------------------
-    print("Loading FAISS index...")
+    # -----------------------------------------
+
+    print("Loading FAISS Index...")
 
     index, metadata = load_index(
-        index_path,
-        metadata_path
+        INDEX_PATH,
+        METADATA_PATH,
     )
 
-    print(f"Index Loaded ({index.ntotal} vectors)\n")
+    print(f"Loaded {index.ntotal} vectors.\n")
 
-    # -------------------------------
-    # Ask Questions
-    # -------------------------------
+    # -----------------------------------------
+    # Conversation Memory
+    # -----------------------------------------
+
+    chat_memory = []
+
+    # -----------------------------------------
+    # Chat Loop
+    # -----------------------------------------
+
     while True:
 
-        query = input("Ask a question (type 'exit' to quit): ")
+        query = input("\nAsk a question (type 'exit' to quit): ")
 
         if query.lower() == "exit":
+            print("Goodbye!")
             break
 
         # Retrieve relevant chunks
@@ -91,38 +98,54 @@ def main():
             query=query,
             index=index,
             metadata=metadata,
-            top_k=3
+            top_k=TOP_K,
         )
 
-        # Print retrieved chunks (for debugging)
-        print("\nTop Relevant Chunks")
+        # Build prompt
+        prompt = build_prompt(
+            query=query,
+            retrieved_chunks=results,
+        )
+
+        # Generate answer (uses memory)
+        answer = generate_response(
+            prompt=prompt,
+            memory=chat_memory,
+        )
+
+        # Save conversation
+        add_to_memory(
+            chat_memory,
+            role="user",
+            content=query,
+        )
+
+        add_to_memory(
+            chat_memory,
+            role="assistant",
+            content=answer,
+        )
+
+        # Print answer
+        print("\nAnswer")
         print("=" * 80)
-
-        for i, chunk in enumerate(results, start=1):
-            print(f"Result {i}")
-            print(f"Chunk ID    : {chunk['chunk_id']}")
-            print(f"Page Number : {chunk['page_number']}")
-            print("-" * 80)
-            print(chunk["text"][:300])
-            print()
-
-        # Build Prompt
-        prompt = build_prompt(query, results)
-        answer = generate_response(prompt)
-        
-
-        pages = sorted(
-            set(chunk["page_number"] for chunk in results)
-        )
-
         print(answer)
 
-        print("\nSources:")
+        # Print sources
+        pages = sorted(
+            {
+                chunk["page_number"]
+                for chunk in results
+            }
+        )
+
+        print("\nSources")
+        print("=" * 80)
 
         for page in pages:
-            print(f"- Page {page}")
-       
-       
+            print(f"Page {page}")
+
+        print("=" * 80)
 
 
 if __name__ == "__main__":

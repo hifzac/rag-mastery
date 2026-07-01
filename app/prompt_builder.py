@@ -4,10 +4,9 @@ def build_prompt(query: str, retrieved_chunks: list[dict]) -> str:
     """
 
     context = ""
-
     for chunk in retrieved_chunks:
         context += (
-            f"Page {chunk['page_number']}\n"
+            f"[Source: Page {chunk['page_number']}]\n"
             f"{chunk['text']}\n\n"
         )
 
@@ -15,13 +14,17 @@ def build_prompt(query: str, retrieved_chunks: list[dict]) -> str:
     prompt = f"""
 You are a ServiceNow expert.
 
-Use ONLY the information in the context below.
+Answer the user's question using ONLY the context below.
 
-If the context contains enough information,
-answer the user's question in your own words.
+If the answer is available,
+provide a concise answer.
 
-If the answer truly does not exist in the context,
-reply exactly:
+At the end of your answer,
+include all page numbers that were used
+under a heading called "Sources".
+
+If the answer is not found,
+reply:
 
 I don't have enough information.
 

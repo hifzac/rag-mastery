@@ -1,10 +1,20 @@
 import streamlit as st
 
 from vector_store import load_index
-from retriever import retrieve
+from bm25_store import load_bm25
+from hybrid_retriever import hybrid_search
+from reranker import rerank
 from prompt_builder import build_prompt
 from llm import generate_response
-from config import INDEX_PATH, METADATA_PATH, TOP_K
+from query_rewriter import rewrite_query
+
+from config import (
+    INDEX_PATH,
+    METADATA_PATH,
+    BM25_PATH,
+    RETRIEVAL_TOP_K,
+    RERANK_TOP_K
+)
 
 # --------------------------------------------------
 # Page Config
@@ -35,14 +45,23 @@ footer {visibility:hidden;}
 """, unsafe_allow_html=True)
 
 # --------------------------------------------------
-# Load FAISS Once
+# Load Vector Database
 # --------------------------------------------------
 
 @st.cache_resource
-def load_vector_database():
-    return load_index(INDEX_PATH, METADATA_PATH)
+def load_databases():
 
-index, metadata = load_vector_database()
+    index, metadata = load_index(
+        INDEX_PATH,
+        METADATA_PATH
+    )
+
+    bm25 = load_bm25(BM25_PATH)
+
+    return index, metadata, bm25
+
+
+index, metadata, bm25 = load_databases()
 
 # --------------------------------------------------
 # Session State
@@ -68,8 +87,13 @@ with st.sidebar:
 - ✂️ Chunking
 - 🧠 Sentence Transformers
 - 🔍 FAISS
+- 🔎 BM25
+- 🔀 Hybrid Retrieval
+- 🎯 Cross Encoder Reranker
 - 🤖 Groq Llama
 - 💬 Conversation Memory
+- 🧠 Query Rewriting
+- ⚡ Streaming Responses
 """)
 
     st.markdown("---")
@@ -84,10 +108,12 @@ with st.sidebar:
 
 st.title("🤖 ServiceNow AI Assistant")
 
-st.caption("Ask questions about your ServiceNow documentation.")
+st.caption(
+    "Ask questions about your ServiceNow documentation."
+)
 
 # --------------------------------------------------
-# Display Previous Chat
+# Display Previous Messages
 # --------------------------------------------------
 
 for message in st.session_state.messages:
@@ -96,7 +122,10 @@ for message in st.session_state.messages:
 
         st.markdown(message["content"])
 
-        if message["role"] == "assistant" and "sources" in message:
+        if (
+            message["role"] == "assistant"
+            and "sources" in message
+        ):
 
             with st.expander("📄 Sources"):
 
@@ -111,7 +140,9 @@ query = st.chat_input("Ask your question...")
 
 if query:
 
-    # Display user message
+    # -----------------------------
+    # Display User Message
+    # -----------------------------
 
     with st.chat_message("user"):
         st.markdown(query)
@@ -125,27 +156,54 @@ if query:
         }
     )
 
-    # Retrieve relevant chunks
+    # -----------------------------
+    # Retrieval Pipeline
+    # -----------------------------
 
     with st.spinner("Searching documentation..."):
 
-        results = retrieve(
+        # Step 1: Rewrite query using conversation history
+        rewritten_query = rewrite_query(
             query=query,
-            index=index,
-            metadata=metadata,
-            top_k=TOP_K
+            memory=st.session_state.messages
         )
 
+        # Uncomment for debugging
+        # st.info(f"Rewritten Query: {rewritten_query}")
+
+        # Step 2: Hybrid Retrieval
+        retrieved_chunks = hybrid_search(
+            query=rewritten_query,
+            index=index,
+            bm25=bm25,
+            metadata=metadata,
+            top_k=RETRIEVAL_TOP_K
+        )
+
+        # Step 3: Rerank
+        results = rerank(
+            query=query,
+            retrieved_chunks=retrieved_chunks,
+            top_k=RERANK_TOP_K
+        )
+
+        # Step 4: Build Prompt
         prompt = build_prompt(
             query=query,
             retrieved_chunks=results
         )
 
+        # Step 5: Source Pages
         pages = sorted(
-            set(chunk["page_number"] for chunk in results)
+            {
+                chunk["page_number"]
+                for chunk in results
+            }
         )
 
-    # Stream Assistant Response
+    # -----------------------------
+    # Generate Streaming Response
+    # -----------------------------
 
     with st.chat_message("assistant"):
 
@@ -153,12 +211,12 @@ if query:
 
         full_response = ""
 
-        for chunk in generate_response(
+        for token in generate_response(
             prompt=prompt,
             memory=st.session_state.messages
         ):
 
-            full_response += chunk
+            full_response += token
 
             placeholder.markdown(full_response + "▌")
 
@@ -167,9 +225,11 @@ if query:
         with st.expander("📄 Sources"):
 
             for page in pages:
-                st.write(f"Page {page}")
+                st.write(f"📄 Page {page}")
 
-    # Save Assistant Response
+    # -----------------------------
+    # Save Assistant Message
+    # -----------------------------
 
     st.session_state.messages.append(
         {
@@ -177,4 +237,4 @@ if query:
             "content": full_response,
             "sources": pages
         }
-    )
+    ) 

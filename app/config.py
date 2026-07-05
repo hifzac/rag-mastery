@@ -15,7 +15,7 @@ PDF_PATH = DATA_DIR / "servicenow-australia-operational-technology-enus.pdf"
 INDEX_PATH = DATA_DIR / "faiss_index.bin"
 
 METADATA_PATH = DATA_DIR / "metadata.pkl"
-
+BM25_PATH = DATA_DIR / "bm25.pkl"
 # -----------------------------
 # Chunking
 # -----------------------------
@@ -27,7 +27,9 @@ CHUNK_OVERLAP = 200
 # Retrieval
 # -----------------------------
 
-TOP_K = 3
+RETRIEVAL_TOP_K = 10
+
+RERANK_TOP_K = 3
 
 # -----------------------------
 # Models

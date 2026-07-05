@@ -1,3 +1,5 @@
+from packaging import metadata
+
 from loader import load_pdf
 from chunker import chunk_data
 from embeddings import generate_embeddings
@@ -12,6 +14,7 @@ from llm import generate_response
 from memory import add_to_memory
 
 from config import (
+    BM25_PATH,
     PDF_PATH,
     INDEX_PATH,
     METADATA_PATH,
@@ -19,7 +22,10 @@ from config import (
     CHUNK_OVERLAP,
     TOP_K,
 )
-
+from bm25_store import (
+    build_bm25_index,
+    save_bm25
+)
 
 def main():
 
@@ -52,14 +58,17 @@ def main():
         print("Building FAISS Index...")
 
         index, metadata = build_index(embedded_chunks)
-
+        bm25 = build_bm25_index(metadata)
         save_index(
             index,
             metadata,
             INDEX_PATH,
             METADATA_PATH,
         )
-
+        save_bm25(
+        bm25,
+        BM25_PATH
+        )
         print("Index Created Successfully!\n")
 
     # -----------------------------------------
@@ -72,7 +81,7 @@ def main():
         INDEX_PATH,
         METADATA_PATH,
     )
-
+    
     print(f"Loaded {index.ntotal} vectors.\n")
 
     # -----------------------------------------

@@ -1,5 +1,12 @@
+# PDFs
+data/*.pdf
+
+# Generated files
+data/faiss_index.bin
+data/metadata.pkl
+data/bm25.pkl
+
+# Python
+venv/
+__pycache__/
 .env
-venv
-__pycache__
-*.pkl
-*.bin

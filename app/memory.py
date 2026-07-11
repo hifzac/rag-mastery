@@ -1,4 +1,4 @@
-MAX_MEMORY = 10  
+MAX_MEMORY = 10
 
 
 def add_to_memory(memory: list, role: str, content: str):
@@ -16,6 +16,13 @@ def add_to_memory(memory: list, role: str, content: str):
 
 def get_memory(memory: list):
     """
-    Return conversation history.
+    Return only the fields accepted by the LLM.
     """
-    return memory
+
+    return [
+        {
+            "role": msg["role"],
+            "content": msg["content"]
+        }
+        for msg in memory
+    ]

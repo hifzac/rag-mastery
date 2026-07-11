@@ -35,6 +35,12 @@ def rewrite_query(query: str, memory: list) -> str:
             "content": query
         }
     )
+    print("\n================ MESSAGES ================")
+
+    for m in messages:
+        print(m)
+
+    print("==========================================")
 
     response = client.chat.completions.create(
         model=LLM_MODEL,

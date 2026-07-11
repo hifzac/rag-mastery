@@ -20,7 +20,8 @@ from config import (
     METADATA_PATH,
     CHUNK_SIZE,
     CHUNK_OVERLAP,
-    TOP_K,
+    RETRIEVAL_TOP_K,
+    RERANK_TOP_K,
 )
 from bm25_store import (
     build_bm25_index,
@@ -33,7 +34,12 @@ def main():
     # Build Index (Only First Time)
     # -----------------------------------------
 
-    if not INDEX_PATH.exists():
+    if (
+    not INDEX_PATH.exists()
+    or not METADATA_PATH.exists()
+    or not BM25_PATH.exists()
+    or BM25_PATH.stat().st_size == 0
+    ):
 
         print("Loading PDF...")
 
@@ -107,7 +113,7 @@ def main():
             query=query,
             index=index,
             metadata=metadata,
-            top_k=TOP_K,
+            top_k=RETRIEVAL_TOP_K,
         )
 
         # Build prompt
